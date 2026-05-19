@@ -177,6 +177,21 @@ async function fetchGitHubOrgData(username, companyName) {
 function parseLinkedInLogoUrl(text) {
   if (!text) return "";
 
+  // Regra principal: usar o src da img.hue-web-entity__image quando presente.
+  const classBasedPatterns = [
+    /<img[^>]*class=["'][^"']*hue-web-entity__image[^"']*["'][^>]*src=["'](https?:\/\/[^"']+)["'][^>]*>/i,
+    /<img[^>]*src=["'](https?:\/\/[^"']+)["'][^>]*class=["'][^"']*hue-web-entity__image[^"']*["'][^>]*>/i,
+    /img[^\n>]*hue-web-entity__image[^\n>]*src=["'](https?:\/\/[^"']+)["']/i,
+    /img[^\n>]*src=["'](https?:\/\/[^"']+)["'][^\n>]*hue-web-entity__image/i
+  ];
+
+  for (const pattern of classBasedPatterns) {
+    const match = pattern.exec(text);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
   // Tenta imagens do LinkedIn em Markdown convertido pelo r.jina.ai
   const markdownImages = [...text.matchAll(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/gi)]
     .map((m) => m[1])
