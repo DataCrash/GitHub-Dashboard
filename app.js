@@ -6,8 +6,8 @@ const DEFAULT_USERNAME = "DataCrash";
 const LINKEDIN_PROFILE_URL = "https://www.linkedin.com/in/datacrash";
 
 const COMPANY_DOMAIN_MAP = {
-  "c&a": "cea.com.br",
-  "ca": "cea.com.br",
+  "c&a": "cea.com",
+  "ca": "cea.com",
   "carglass": "carglass.com.br",
   "ecorodovias": "ecorodovias.com.br",
   "itau": "itau.com.br"
@@ -82,18 +82,48 @@ function normalizeCompany(value) {
     .trim();
 }
 
-function resolveCompanyLogo(companyName) {
+function preloadImage(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(url);
+    img.onerror = () => resolve("");
+    img.src = url;
+  });
+}
+
+function getCompanyLogoCandidates(companyName) {
   const normalized = normalizeCompany(companyName).toLowerCase();
   if (!normalized) {
-    return "";
+    return [];
   }
 
   const foundKey = Object.keys(COMPANY_DOMAIN_MAP).find((key) => normalized.includes(key));
   if (!foundKey) {
+    return [];
+  }
+
+  const domain = COMPANY_DOMAIN_MAP[foundKey];
+  return [
+    `https://logo.clearbit.com/${domain}`,
+    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+  ];
+}
+
+async function resolveCompanyLogo(companyName) {
+  const candidates = getCompanyLogoCandidates(companyName);
+  if (candidates.length === 0) {
     return "";
   }
 
-  return `https://logo.clearbit.com/${COMPANY_DOMAIN_MAP[foundKey]}`;
+  for (const candidate of candidates) {
+    const resolved = await preloadImage(candidate);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  return "";
 }
 
 function applyCompany(companyName, logoUrl = "") {
@@ -149,7 +179,7 @@ async function syncCompanyFromLinkedInFallback() {
 
     return {
       companyName,
-      logoUrl: resolveCompanyLogo(companyName)
+      logoUrl: await resolveCompanyLogo(companyName)
     };
   } catch {
     return null;
@@ -294,7 +324,7 @@ async function loadDashboard() {
     const githubCompany = normalizeCompany(user.company);
     const cachedCompany = loadCachedCompany();
     const fallbackCompany = githubCompany || cachedCompany?.companyName || "";
-    const fallbackLogo = githubCompany ? resolveCompanyLogo(githubCompany) : (cachedCompany?.logoUrl || "");
+    const fallbackLogo = githubCompany ? await resolveCompanyLogo(githubCompany) : (cachedCompany?.logoUrl || "");
     applyCompany(fallbackCompany, fallbackLogo);
 
     if (githubCompany) {
