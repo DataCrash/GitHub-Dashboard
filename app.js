@@ -195,6 +195,8 @@ function parseLinkedInCompany(text) {
   if (!text) return "";
 
   const patterns = [
+    /title:\s*[^\n|]+-\s*([^|\n]{2,120})\|\s*LinkedIn/i,
+    /https?:\/\/(?:[a-z]{2}\.)?linkedin\.com\/company\/[^\s?]+\?trk=[^\s\n]*topcard-current-company[^\n]*\n?/i,
     /Current company[:\s]+([^\n|]+)/i,
     /(?:works? at|working at|employed at)[:\s]+([^\n|,]+)/i,
     /company[^\n:]*[:-]\s*([^\n|]{3,80})/i
@@ -202,8 +204,17 @@ function parseLinkedInCompany(text) {
 
   for (const pattern of patterns) {
     const m = pattern.exec(text);
-    if (m?.[1]) {
-      const name = normalizeCompany(m[1]);
+    if (m?.[0]) {
+      let extracted = m[1] || "";
+
+      // Quando casar URL da empresa (topcard-current-company), tenta pegar o slug e normalizar.
+      if (!extracted && /\/company\//i.test(m[0])) {
+        const slugMatch = m[0].match(/\/company\/([^/?\s]+)/i);
+        extracted = slugMatch?.[1] || "";
+        extracted = decodeURIComponent(extracted).replace(/[_-]+/g, " ");
+      }
+
+      const name = normalizeCompany(extracted);
       if (name && name.length > 1) return name;
     }
   }
@@ -235,32 +246,36 @@ function parseLinkedInBio(text) {
 // Se não existir (404 / authwall sem conteúdo), retorna null e mantém fallback do GitHub
 async function fetchLinkedInProfileData(username) {
   try {
-    const url = `${LINKEDIN_BASE_URL}${encodeURIComponent(username)}`;
-    const response = await fetch(`https://r.jina.ai/${url}`, { signal: AbortSignal.timeout(8000) });
-    if (!response.ok) return null;
+    const profileCandidates = [
+      `${LINKEDIN_BASE_URL}${encodeURIComponent(username)}`,
+      `https://br.linkedin.com/in/${encodeURIComponent(username)}`,
+      `https://pt.linkedin.com/in/${encodeURIComponent(username)}`
+    ];
 
-    const text = await response.text();
+    for (const profileUrl of profileCandidates) {
+      const response = await fetch(`https://r.jina.ai/${profileUrl}`, { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) continue;
 
-    // Detecta authwall/perfil inexistente
-    const isBlocked =
-      text.toLowerCase().includes("authwall") ||
-      text.toLowerCase().includes("join linkedin") ||
-      text.toLowerCase().includes("sign in") ||
-      text.length < 300;
-    if (isBlocked) return null;
+      const text = await response.text();
+      if (!text || text.length < 200) continue;
 
-    const companyName = parseLinkedInCompany(text);
-    const bio = parseLinkedInBio(text);
-    const companyLogoUrl = parseLinkedInLogoUrl(text);
+      const companyName = parseLinkedInCompany(text);
+      const bio = parseLinkedInBio(text);
+      const companyLogoUrl = parseLinkedInLogoUrl(text);
 
-    if (!companyName && !bio && !companyLogoUrl) return null;
+      // Página pública pode conter "Sign in/Join" e ainda assim trazer dados válidos.
+      const hasSignals = Boolean(companyName || bio || companyLogoUrl);
+      if (!hasSignals) continue;
 
-    return {
-      companyName,
-      bio,
-      companyLogoUrl,
-      profileUrl: url
-    };
+      return {
+        companyName,
+        bio,
+        companyLogoUrl,
+        profileUrl
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
