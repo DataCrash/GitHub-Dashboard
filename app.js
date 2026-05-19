@@ -247,13 +247,13 @@ function parseLinkedInBio(text) {
 async function fetchLinkedInProfileData(username) {
   try {
     const profileCandidates = [
-      `${LINKEDIN_BASE_URL}${encodeURIComponent(username)}`,
       `https://br.linkedin.com/in/${encodeURIComponent(username)}`,
-      `https://pt.linkedin.com/in/${encodeURIComponent(username)}`
+      `https://pt.linkedin.com/in/${encodeURIComponent(username)}`,
+      `${LINKEDIN_BASE_URL}${encodeURIComponent(username)}`
     ];
 
     for (const profileUrl of profileCandidates) {
-      const response = await fetch(`https://r.jina.ai/${profileUrl}`, { signal: AbortSignal.timeout(10000) });
+      const response = await fetch(`https://r.jina.ai/${profileUrl}`, { signal: AbortSignal.timeout(20000) });
       if (!response.ok) continue;
 
       const text = await response.text();
