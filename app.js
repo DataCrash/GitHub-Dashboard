@@ -191,6 +191,32 @@ function parseLinkedInLogoUrl(text) {
   return prioritized || candidates[0] || "";
 }
 
+function parseLinkedInTopCardByClass(text) {
+  if (!text || !text.includes("<")) {
+    return { companyName: "", companyLogoUrl: "" };
+  }
+
+  try {
+    const doc = new DOMParser().parseFromString(text, "text/html");
+
+    const logoEl = doc.querySelector('img.hue-web-entity__image, img[class*="hue-web-entity__image"]');
+    const companyEl = doc.querySelector('span.top-card-link__description, span[class*="top-card-link__description"]');
+
+    const companyLogoUrl = (logoEl?.getAttribute("src") || "").trim();
+    const companyName = normalizeCompany(companyEl?.textContent || "");
+
+    return { companyName, companyLogoUrl };
+  } catch {
+    return { companyName: "", companyLogoUrl: "" };
+  }
+}
+
+function buildGenericCompanyLogo(companyName) {
+  const cleanName = normalizeCompany(companyName);
+  if (!cleanName) return "";
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=1e293b&color=94a3b8&size=128&bold=true&format=png`;
+}
+
 function parseLinkedInCompany(text) {
   if (!text) return "";
 
@@ -259,9 +285,11 @@ async function fetchLinkedInProfileData(username) {
       const text = await response.text();
       if (!text || text.length < 200) continue;
 
-      const companyName = parseLinkedInCompany(text);
+      // Prioriza extração estrita pelas classes do top-card do LinkedIn.
+      const byClass = parseLinkedInTopCardByClass(text);
+      const companyName = byClass.companyName || parseLinkedInCompany(text);
       const bio = parseLinkedInBio(text);
-      const companyLogoUrl = parseLinkedInLogoUrl(text);
+      const companyLogoUrl = byClass.companyLogoUrl || parseLinkedInLogoUrl(text);
 
       // Página pública pode conter "Sign in/Join" e ainda assim trazer dados válidos.
       const hasSignals = Boolean(companyName || bio || companyLogoUrl);
@@ -473,33 +501,29 @@ async function loadDashboard() {
       applyCompany("");
     }
 
-    // Busca org GitHub e dados públicos do LinkedIn em paralelo
-    const [orgData, linkedinData] = await Promise.all([
-      fetchGitHubOrgData(username, githubCompany),
-      fetchLinkedInProfileData(username)
-    ]);
+    // Busca dados públicos do LinkedIn; fallback continua sendo o company do GitHub (CV).
+    const linkedinData = await fetchLinkedInProfileData(username);
 
-    let finalCompany = "";
+    let finalCompany = githubCompany || "";
     let finalLogoUrl = "";
 
     if (linkedinData?.bio) {
       els.bio.textContent = linkedinData.bio;
     }
 
-    if (orgData) {
-      // Org GitHub tem avatar oficial — preferência máxima
-      finalCompany = githubCompany || orgData.companyName;
-      finalLogoUrl = await resolveCompanyLogo(finalCompany, orgData.orgAvatarUrl);
-    } else if (linkedinData?.companyName) {
-      // LinkedIn (mesmo username) com empresa e, se disponível, logo oficial
+    if (linkedinData?.companyName) {
+      // Empresa encontrada no perfil público do LinkedIn.
       finalCompany = linkedinData.companyName;
-      finalLogoUrl = await resolveCompanyLogo(finalCompany, "", linkedinData.companyLogoUrl || "");
-    } else if (githubCompany) {
-      // Campo company do perfil GitHub
-      finalCompany = githubCompany;
-      finalLogoUrl = await resolveCompanyLogo(finalCompany);
     }
-    // Se nenhum fonte retornou empresa, deixa badge oculto
+
+    if (linkedinData?.companyLogoUrl) {
+      // Logo oficial do LinkedIn (quando disponível)
+      finalLogoUrl = linkedinData.companyLogoUrl;
+    } else if (finalCompany) {
+      // Fallback explícito para logo genérica quando LinkedIn não retornar logo.
+      finalLogoUrl = buildGenericCompanyLogo(finalCompany);
+    }
+    // Se não houver empresa em nenhuma fonte, mantém badge oculto.
 
     applyCompany(finalCompany, finalLogoUrl);
     if (finalCompany) {
