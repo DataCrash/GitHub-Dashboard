@@ -258,16 +258,21 @@ h1 {
 }
 
 .repo-item {
-  text-decoration: none;
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 0.68rem 0.72rem;
+  padding: 0.62rem 0.68rem;
+  color: var(--text);
+  background: var(--surface-solid);
+}
+
+.repo-head {
+  all: unset;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
-  color: var(--text);
-  background: var(--surface-solid);
+  width: 100%;
 }
 
 .repo-item h4 {
@@ -285,6 +290,54 @@ h1 {
   color: var(--muted);
   font-size: 0.82rem;
   white-space: nowrap;
+}
+
+.repo-details {
+  border-top: 1px dashed var(--border);
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.repo-details p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.detail-chip {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.repo-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.repo-links a {
+  font-size: 0.78rem;
+  text-decoration: none;
+  color: var(--accent-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.22rem 0.55rem;
+}
+
+.repo-toggle {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .compact .repo-item {
@@ -323,6 +376,17 @@ h1 {
 
 .hidden {
   display: none !important;
+}
+
+.sr-only {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
 }
 
 .reveal {
@@ -364,5 +428,9 @@ h1 {
 
   .bar-row {
     grid-template-columns: 100px 1fr 40px;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }

@@ -1,6 +1,7 @@
 const API_BASE = "https://api.github.com";
 const STORAGE_KEY_THEME = "gh-dashboard-theme";
 const STORAGE_KEY_LAST_USER = "gh-dashboard-last-user";
+const DEFAULT_USERNAME = "DataCrash";
 
 const els = {
   usernameInput: document.getElementById("usernameInput"),
@@ -39,7 +40,7 @@ function initTheme() {
     return;
   }
 
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const prefersDark = globalThis.matchMedia("(prefers-color-scheme: dark)").matches;
   setTheme(prefersDark ? "dark" : "light");
 }
 
@@ -47,9 +48,20 @@ function formatNumber(num) {
   return new Intl.NumberFormat("pt-BR").format(num || 0);
 }
 
-function status(message, isError = false) {
+function setStatus(message, isError = false) {
   els.status.textContent = message;
   els.status.style.color = isError ? "#ff6d7a" : "";
+}
+
+function formatDate(isoDate) {
+  if (!isoDate) {
+    return "N/A";
+  }
+  return new Date(isoDate).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
 }
 
 async function fetchJson(url) {
@@ -74,14 +86,43 @@ async function fetchJson(url) {
 
 function repoItem(repo) {
   const node = els.repoItemTpl.content.firstElementChild.cloneNode(true);
+  const head = node.querySelector(".repo-head");
   const title = node.querySelector("h4");
   const desc = node.querySelector("p");
   const meta = node.querySelector(".repo-meta");
+  const details = node.querySelector(".repo-details");
 
-  node.href = repo.html_url;
   title.textContent = repo.name;
   desc.textContent = repo.description || "Sem descrição";
-  meta.textContent = `★ ${formatNumber(repo.stargazers_count)} · ${repo.language || "N/A"}`;
+  meta.textContent = `★ ${formatNumber(repo.stargazers_count)} · ${repo.language || "N/A"} · ▼`;
+
+  const topics = (repo.topics || []).slice(0, 4).join(" · ") || "Sem tópicos";
+  details.innerHTML = `
+    <p>${repo.description || "Sem descrição adicional."}</p>
+    <div class="detail-grid">
+      <div class="detail-chip">Forks: ${formatNumber(repo.forks_count)}</div>
+      <div class="detail-chip">Issues: ${formatNumber(repo.open_issues_count)}</div>
+      <div class="detail-chip">Branch: ${repo.default_branch || "main"}</div>
+      <div class="detail-chip">Criado: ${formatDate(repo.created_at)}</div>
+      <div class="detail-chip">Atualizado: ${formatDate(repo.updated_at)}</div>
+      <div class="detail-chip">Pushed: ${formatDate(repo.pushed_at)}</div>
+    </div>
+    <p>Tópicos: ${topics}</p>
+    <div class="repo-links">
+      <a href="${repo.html_url}" target="_blank" rel="noreferrer">Abrir repositório</a>
+      ${repo.homepage ? `<a href="${repo.homepage}" target="_blank" rel="noreferrer">Homepage</a>` : ""}
+    </div>
+    <span class="repo-toggle">Clique no card para colapsar</span>
+  `;
+
+  head.addEventListener("click", () => {
+    const expanded = node.dataset.expanded === "true";
+    node.dataset.expanded = expanded ? "false" : "true";
+    details.classList.toggle("hidden", expanded);
+    meta.textContent = expanded
+      ? `★ ${formatNumber(repo.stargazers_count)} · ${repo.language || "N/A"} · ▼`
+      : `★ ${formatNumber(repo.stargazers_count)} · ${repo.language || "N/A"} · ▲`;
+  });
 
   return node;
 }
@@ -131,12 +172,12 @@ function showContent(show) {
 async function loadDashboard() {
   const username = els.usernameInput.value.trim();
   if (!username) {
-    status("Informe um usuário do GitHub para carregar o dashboard.", true);
+    setStatus("Informe um usuário do GitHub para carregar o dashboard.", true);
     showContent(false);
     return;
   }
 
-  status("Carregando dados do GitHub...");
+  setStatus("Carregando dados do GitHub...");
   els.loadBtn.disabled = true;
 
   try {
@@ -171,10 +212,10 @@ async function loadDashboard() {
 
     localStorage.setItem(STORAGE_KEY_LAST_USER, username);
     showContent(true);
-    status(`Dashboard carregado para @${user.login}.`);
+    setStatus(`Dashboard carregado para @${user.login}.`);
   } catch (err) {
     showContent(false);
-    status(err.message || "Erro inesperado ao montar dashboard.", true);
+    setStatus(err.message || "Erro inesperado ao montar dashboard.", true);
   } finally {
     els.loadBtn.disabled = false;
   }
@@ -195,11 +236,11 @@ els.usernameInput.addEventListener("keydown", (event) => {
 (function init() {
   initTheme();
 
-  const lastUser = localStorage.getItem(STORAGE_KEY_LAST_USER) || "";
+  const lastUser = localStorage.getItem(STORAGE_KEY_LAST_USER) || DEFAULT_USERNAME;
   els.usernameInput.value = lastUser;
-  if (lastUser) {
+  if (els.usernameInput.value.trim()) {
     loadDashboard();
   } else {
-    status("Digite um usuário e clique em Carregar para gerar o overview.");
+    setStatus("Digite um usuário e clique em Carregar para gerar o overview.");
   }
 })();

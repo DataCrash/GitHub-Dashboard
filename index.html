@@ -92,13 +92,16 @@
   </main>
 
   <template id="repoItemTpl">
-    <a class="repo-item" target="_blank" rel="noreferrer">
-      <div>
-        <h4></h4>
-        <p></p>
-      </div>
-      <div class="repo-meta"></div>
-    </a>
+    <article class="repo-item" data-expanded="false">
+      <button class="repo-head" type="button">
+        <div>
+          <h4><span class="sr-only">Nome do repositório</span></h4>
+          <p></p>
+        </div>
+        <div class="repo-meta"></div>
+      </button>
+      <div class="repo-details hidden"></div>
+    </article>
   </template>
 
   <script src="app.js"></script>
