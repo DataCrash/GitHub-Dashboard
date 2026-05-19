@@ -1,7 +1,17 @@
 const API_BASE = "https://api.github.com";
 const STORAGE_KEY_THEME = "gh-dashboard-theme";
 const STORAGE_KEY_LAST_USER = "gh-dashboard-last-user";
+const STORAGE_KEY_COMPANY_CACHE = "gh-dashboard-company-cache";
 const DEFAULT_USERNAME = "DataCrash";
+const LINKEDIN_PROFILE_URL = "https://www.linkedin.com/in/datacrash";
+
+const COMPANY_DOMAIN_MAP = {
+  "c&a": "cea.com.br",
+  "ca": "cea.com.br",
+  "carglass": "carglass.com.br",
+  "ecorodovias": "ecorodovias.com.br",
+  "itau": "itau.com.br"
+};
 
 const els = {
   usernameInput: document.getElementById("usernameInput"),
@@ -17,6 +27,7 @@ const els = {
   profileLink: document.getElementById("profileLink"),
   location: document.getElementById("location"),
   company: document.getElementById("company"),
+  companyLogo: document.getElementById("companyLogo"),
   kpiRepos: document.getElementById("kpiRepos"),
   kpiFollowers: document.getElementById("kpiFollowers"),
   kpiFollowing: document.getElementById("kpiFollowing"),
@@ -62,6 +73,87 @@ function formatDate(isoDate) {
     month: "2-digit",
     year: "numeric"
   });
+}
+
+function normalizeCompany(value) {
+  return (value || "")
+    .replace(/^@/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveCompanyLogo(companyName) {
+  const normalized = normalizeCompany(companyName).toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+
+  const foundKey = Object.keys(COMPANY_DOMAIN_MAP).find((key) => normalized.includes(key));
+  if (!foundKey) {
+    return "";
+  }
+
+  return `https://logo.clearbit.com/${COMPANY_DOMAIN_MAP[foundKey]}`;
+}
+
+function applyCompany(companyName, logoUrl = "") {
+  const finalCompany = normalizeCompany(companyName) || "Sem empresa informada";
+  els.company.textContent = finalCompany;
+
+  if (logoUrl) {
+    els.companyLogo.src = logoUrl;
+    els.companyLogo.classList.remove("hidden");
+  } else {
+    els.companyLogo.classList.add("hidden");
+    els.companyLogo.src = "";
+  }
+}
+
+function loadCachedCompany() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_COMPANY_CACHE);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedCompany(companyName, logoUrl) {
+  localStorage.setItem(
+    STORAGE_KEY_COMPANY_CACHE,
+    JSON.stringify({ companyName: normalizeCompany(companyName), logoUrl: logoUrl || "", at: Date.now() })
+  );
+}
+
+async function syncCompanyFromLinkedInFallback() {
+  try {
+    const response = await fetch(`https://r.jina.ai/http://${LINKEDIN_PROFILE_URL.replace(/^https?:\/\//, "")}`);
+    if (!response.ok) {
+      return null;
+    }
+
+    const text = await response.text();
+    const companyRegex = /company[^\n:]*[:-]\s*([^\n]+)/i;
+    const match = companyRegex.exec(text);
+    if (!match?.[1]) {
+      return null;
+    }
+
+    const companyName = normalizeCompany(match[1]);
+    if (!companyName) {
+      return null;
+    }
+
+    return {
+      companyName,
+      logoUrl: resolveCompanyLogo(companyName)
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function fetchJson(url) {
@@ -199,7 +291,21 @@ async function loadDashboard() {
     els.bio.textContent = user.bio || "Sem bio cadastrada.";
     els.profileLink.href = user.html_url;
     els.location.textContent = user.location || "Sem local informado";
-    els.company.textContent = user.company || "Sem empresa informada";
+    const githubCompany = normalizeCompany(user.company);
+    const cachedCompany = loadCachedCompany();
+    const fallbackCompany = githubCompany || cachedCompany?.companyName || "";
+    const fallbackLogo = githubCompany ? resolveCompanyLogo(githubCompany) : (cachedCompany?.logoUrl || "");
+    applyCompany(fallbackCompany, fallbackLogo);
+
+    if (githubCompany) {
+      saveCachedCompany(githubCompany, fallbackLogo);
+    } else {
+      const linkedinCompany = await syncCompanyFromLinkedInFallback();
+      if (linkedinCompany?.companyName) {
+        applyCompany(linkedinCompany.companyName, linkedinCompany.logoUrl);
+        saveCachedCompany(linkedinCompany.companyName, linkedinCompany.logoUrl);
+      }
+    }
 
     els.kpiRepos.textContent = formatNumber(user.public_repos);
     els.kpiFollowers.textContent = formatNumber(user.followers);
