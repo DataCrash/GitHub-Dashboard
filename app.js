@@ -1,4 +1,6 @@
 const API_BASE = "https://api.github.com";
+const APP_SOURCE_VERSION = "2026-05-19-theme-reset-v1";
+const STORAGE_KEY_APP_VERSION = "gh-dashboard-app-version";
 const STORAGE_KEY_THEME = "gh-dashboard-theme";
 const STORAGE_KEY_LAST_USER = "gh-dashboard-last-user";
 const STORAGE_KEY_COMPANY_CACHE = "gh-dashboard-company-cache";
@@ -58,8 +60,26 @@ function initTheme() {
     return;
   }
 
+  // Sem preferência salva: segue o tema padrão do sistema operacional.
   const prefersDark = globalThis.matchMedia("(prefers-color-scheme: dark)").matches;
   setTheme(prefersDark ? "dark" : "light");
+}
+
+function resetStorageIfSourceUpdated() {
+  const storedVersion = localStorage.getItem(STORAGE_KEY_APP_VERSION);
+  if (storedVersion === APP_SOURCE_VERSION) {
+    return;
+  }
+
+  // Em atualização de código, limpa apenas as chaves da aplicação.
+  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith("gh-dashboard-")) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  localStorage.setItem(STORAGE_KEY_APP_VERSION, APP_SOURCE_VERSION);
 }
 
 function formatNumber(num) {
@@ -580,6 +600,7 @@ els.usernameInput.addEventListener("keydown", (event) => {
 });
 
 (function init() {
+  resetStorageIfSourceUpdated();
   initTheme();
 
   const lastUser = localStorage.getItem(STORAGE_KEY_LAST_USER) || DEFAULT_USERNAME;
